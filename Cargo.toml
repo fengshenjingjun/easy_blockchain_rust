@@ -6,3 +6,7 @@ edition = "2024"
 [dependencies]
 sha2 = "0.10"
 num-bigint = "0.4.6"
+hex = "0.4"
+serde = { version = "1.0.225", features = ["derive"] }
+bincode = "2.0.1"
+sled = "0.34"

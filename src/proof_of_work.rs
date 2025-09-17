@@ -1,65 +1,75 @@
-use std::ops::Shl;
-use num_bigint::{BigInt, BigUint};
-use crate::block::Block;
-use sha2::{Digest, Sha256};
+use sha2::{Sha256, Digest};
 
-const TARGET_BITS: i32 = 24;
-pub struct ProofOfWork {
-    block: Block,
-    target: BigInt
+const TARGET_BITS: u32 = 24;
+const MAX_NONCE: i32 = i32::MAX;
+
+pub struct ProofOfWork<'a> {
+    block: &'a super::block::Block,
+    target: num_bigint::BigUint,
 }
 
-impl ProofOfWork {
-    pub fn new(block: Block) -> ProofOfWork {
-        let mut pow = ProofOfWork{
+impl<'a> ProofOfWork<'a> {
+    pub fn new(block: &'a super::block::Block) -> ProofOfWork<'a> {
+        let mut target = num_bigint::BigUint::from(1u32);
+        target <<= 256 - TARGET_BITS;
+
+        ProofOfWork {
             block,
-            target: BigInt::from(1),
-        };
-        let target_temp = BigUint::from(1u32).shl((256 - 24) as usize);
-        pow.target = BigInt::from(target_temp);
-        pow
+            target,
+        }
+    }
+
+    fn prepare_data(&self, nonce: i32) -> Vec<u8> {
+        let mut data = Vec::new();
+        data.extend_from_slice(&self.block.prev_block_hash);
+        data.extend_from_slice(&self.block.data);
+        data.extend_from_slice(&self.int_to_hex(self.block.timestamp as i64));
+        data.extend_from_slice(&self.int_to_hex(TARGET_BITS as i64));
+        data.extend_from_slice(&self.int_to_hex(nonce as i64));
+        data
+    }
+
+    fn int_to_hex(&self, num: i64) -> Vec<u8> {
+        num.to_be_bytes().to_vec()
+    }
+
+    pub fn run(&self) -> (i32, Vec<u8>) {
+        let mut nonce = 0;
+
+        println!("Mining the block containing \"{}\"", String::from_utf8_lossy(&self.block.data));
+        let hash2=
+
+            loop {
+                let data = self.prepare_data(nonce);
+                let mut hasher = Sha256::new();
+                hasher.update(&data);
+                let hash = hasher.finalize().to_vec();
+                println!("\r{}", hex::encode(&hash));
+
+                let hash_int = num_bigint::BigUint::from_bytes_be(&hash);
+
+                if hash_int <= self.target {
+                    break hash;
+                } else {
+                    nonce += 1;
+                    if nonce >= MAX_NONCE {
+                        panic!("Max nonce reached");
+                    }
+                }
+            };
+
+        println!("\n");
+
+        (nonce, hash2)
     }
 
     pub fn validate(&self) -> bool {
         let data = self.prepare_data(self.block.nonce);
-        // 计算双重 SHA-256 哈希 (区块链常见做法)
-        let first_hash = Sha256::digest(&data);
-        let final_hash = Sha256::digest(&first_hash);
-        // 将哈希字节转换为大整数
-        let hash_int = BigInt::from_bytes_be(num_bigint::Sign::Plus, &final_hash);
-        hash_int < self.target
-    }
+        let mut hasher = Sha256::new();
+        hasher.update(&data);
+        let hash = hasher.finalize().to_vec();
+        let hash_int = num_bigint::BigUint::from_bytes_be(&hash);
 
-    fn prepare_data(&self, nonce: i32) -> Vec<u8> {
-        // 将整数转换为十六进制字符串的辅助函数
-        fn int_to_hex(num: i64) -> Vec<u8> {
-            format!("{:x}", num).into_bytes()
-        }
-
-        // 拼接所有数据部分
-        [
-            self.block.prev_block_hash.as_slice(),
-            self.block.data.clone().into_bytes().as_slice(),
-            int_to_hex(self.block.timestamp).as_slice(),
-            int_to_hex(TARGET_BITS as i64).as_slice(),
-            int_to_hex(nonce as i64).as_slice(),
-        ].concat()
-    }
-
-    pub fn run(&self) -> (BigInt, Vec<u8>) {
-        let mut nonce = 0;
-        let mut hash = Default::default();
-        while nonce < i32::MAX {
-            let data = self.prepare_data(nonce);
-            hash = Sha256::digest(&data);
-            println!("hash: {:?}", hash);
-            let hash_int = BigUint::from_bytes_be(&hash);
-            if BigInt::from(hash_int) < self.target {
-                break;
-            } else {
-                nonce += 1;
-            }
-        }
-        (BigInt::from(nonce), hash.as_slice().to_vec())
+        hash_int <= self.target
     }
 }
