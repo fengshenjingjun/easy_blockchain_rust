@@ -22,7 +22,7 @@ impl<'a> ProofOfWork<'a> {
     fn prepare_data(&self, nonce: i32) -> Vec<u8> {
         let mut data = Vec::new();
         data.extend_from_slice(&self.block.prev_block_hash);
-        data.extend_from_slice(&self.block.data);
+        data.extend_from_slice(&self.block.hash_transactions());
         data.extend_from_slice(&self.int_to_hex(self.block.timestamp as i64));
         data.extend_from_slice(&self.int_to_hex(TARGET_BITS as i64));
         data.extend_from_slice(&self.int_to_hex(nonce as i64));
@@ -36,7 +36,7 @@ impl<'a> ProofOfWork<'a> {
     pub fn run(&self) -> (i32, Vec<u8>) {
         let mut nonce = 0;
 
-        println!("Mining the block containing \"{}\"", String::from_utf8_lossy(&self.block.data));
+        println!("Mining the block containing {} transactions", self.block.transactions.len());
         let hash2=
 
             loop {
